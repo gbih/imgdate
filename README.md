@@ -10,3 +10,9 @@ To use:
 - Renamed images are copied into the `dest/<date>` folder. 
 
 - The latest date is used for target folder name. 
+
+
+To do:
+
+- Add testing
+
