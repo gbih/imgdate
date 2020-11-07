@@ -16,14 +16,20 @@ import (
 	"time"
 )
 
-func copyImg(path, destFile string) {
+//--------------------
+
+func copyImg(path, destFile string) error {
 	err := ioutil.WriteFile(destFile, []byte(path), 0644)
 	if err != nil {
 		fmt.Println("Error creating", err)
+		return err
 	}
+	return nil
 }
 
-func DateTimeExtended(x *exif.Exif) (string, error) {
+//--------------------
+
+func dateTimeExtended(x *exif.Exif) (string, error) {
 	tag, err := x.Get(exif.DateTimeOriginal) // "2020:11:05 12:24:06"
 	if err != nil {
 		tag, err = x.Get(exif.DateTime)
@@ -44,8 +50,133 @@ func DateTimeExtended(x *exif.Exif) (string, error) {
 		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second()), err
 }
 
+//--------------------
+
+func getFiles(imageDir string) []string {
+	var files []string
+
+	fmt.Println("IMAGEDIR", imageDir)
+	// Walk through files in this directory and process images
+	err := filepath.Walk(imageDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
+			log.Fatal(err)
+		}
+		if info.IsDir() && info.Name() != imageDir {
+			fmt.Printf("skipping dir: %+v \n", info.Name())
+			return filepath.SkipDir
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".jpg" || ext == ".jpeg" {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		fmt.Printf("error walking the path %q: %v\n", imageDir, err)
+		log.Fatal(err)
+	}
+	return files
+}
+
+//--------------------
+
+func getExifData(srcFiles []string, targetFolder string) string {
+
+	fmt.Println("srcFiles:", srcFiles, "targetFolder:", targetFolder)
+
+	// Use a WaitGroup to block until all the concurrent writes are complete
+	var wg sync.WaitGroup
+	var foldername = "tmp"
+	i := 1
+
+	for _, file := range srcFiles {
+		f, err := os.Open(file)
+
+		// decodedData contains all the exif properties
+		decodedData, err := exif.Decode(f)
+
+		if err != nil {
+			fmt.Println("ERROR")
+			// if no exif data, return
+			return foldername
+		}
+		// Exif date properties
+		imgName, err := dateTimeExtended(decodedData)
+		if err != nil {
+			//log.Fatal("Exif date properties error:", err)
+			fmt.Println("Exif date properties error:", err)
+		}
+
+		imgNameFinal := fmt.Sprintf("%v_%v.jpg", imgName, i)
+
+		// if we get to here, assume we have exif data
+		foldername = strings.Split(imgNameFinal, "_")[0]
+		fmt.Println("foldername:", foldername)
+
+		destFile := fmt.Sprintf("%v/%v", targetFolder, imgNameFinal)
+
+		// Increment the WaitGroup counter
+		wg.Add(1)
+
+		// Use this wrapper so we can easily add ctx later
+		go func(path, destFile string) {
+			copyImg(file, destFile)
+			// Decrement the counter when the goroutine completes
+			defer wg.Done()
+		}(file, destFile) // Do parameter passing here
+
+		i++
+	}
+
+	// Wait for all file writes to complete.
+	wg.Wait()
+
+	return foldername
+}
+
+//--------------------
+
+func compareDir(targetDir1 string) error {
+	cmd := exec.Command("sh", "-c", "ls $targetDir1 | wc -l")
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Number of files in files: %s", stdoutStderr)
+
+	cmd = exec.Command("sh", "-c", "ls $targetDir1/tmp | wc -l")
+	stdoutStderr, err = cmd.CombinedOutput()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Number of files in dest: %s", stdoutStderr)
+
+	return nil
+}
+
+//--------------------
+
+func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) error {
+	if (fmt.Sprintf("%v", *titlePtr)) != "" {
+		err := os.Rename(targetDir, fmt.Sprintf("./%s/%s-%s", targetDir1, foldername, (fmt.Sprintf("%v", *titlePtr))))
+		return err
+	} else {
+		err := os.Rename(targetDir, fmt.Sprintf("./%s/%s", targetDir1, foldername))
+		return err
+	}
+}
+
+//--------------------
+
 func main() {
 	fmt.Println("======================================")
+
+	targetDir1 := "./dest"
+	targetDir2 := "tmp"
+	targetDir := targetDir1 + "/" + targetDir2
 
 	// Set up timer
 	var startTime int64
@@ -54,9 +185,6 @@ func main() {
 	// Check for any cmd-line args
 	titlePtr := flag.String("t", "", "folder title")
 	flag.Parse()
-
-	// Use a WaitGroup to block until all the concurrent writes are complete
-	var wg sync.WaitGroup
 
 	// Set up directories
 	imageDir := "files"
@@ -71,106 +199,47 @@ func main() {
 		fmt.Println(err)
 	}
 
-	err = os.MkdirAll("./dest/tmp", 0755)
+	err = os.MkdirAll(targetDir, 0755)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	i := 1
-	ffoldername := ""
-
-	// Walk through files in this directory and process images
-	err = filepath.Walk(imageDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
-			//return err
-			log.Fatal(err)
-		}
-		if info.IsDir() && info.Name() != imageDir {
-			fmt.Printf("skipping dir: %+v \n", info.Name())
-			return filepath.SkipDir
-		}
-
-		// Test for images
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".jpg" || ext == ".jpeg" {
-
-			// Prepare image file for copying
-			f, err := os.Open(path)
-
-			// Exif processing
-			x, err := exif.Decode(f)
-			if err != nil {
-				fmt.Println("ERROR")
-				//log.Fatal(err)
-				return nil
-			}
-
-			//fmt.Println(x)
-
-			tm, err := DateTimeExtended(x)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			//fmt.Println(fmt.Sprint(tm))
-
-			tm2 := fmt.Sprintf("%v_%v.jpg", tm, i)
-
-			foldername := strings.Split(tm2, "_")
-			ffoldername = foldername[0]
-
-			destFile := fmt.Sprintf("./dest/tmp/%v", tm2)
-
-			// Increment the WaitGroup counter
-			wg.Add(1)
-
-			// Use this wrapper so we can easily add ctx later
-			// go copyImg(path, destFile)
-			go func(path, destFile string) {
-				copyImg(path, destFile)
-				// Decrement the counter when the goroutine completes
-				defer wg.Done()
-			}(path, destFile) // Do parameter passing here
-
-			i++
-		}
-
-		// Wait for all file writes to complete.
-		wg.Wait()
-
-		return nil
-	})
-
-	// Check for consistency between source and target directories
-	cmd := exec.Command("sh", "-c", "ls files | wc -l")
-	stdoutStderr, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Number of files in files: %s", stdoutStderr)
-
-	cmd = exec.Command("sh", "-c", "ls dest/tmp | wc -l")
-	stdoutStderr, err = cmd.CombinedOutput()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Number of files in dest: %s", stdoutStderr)
-
-	// Rename target directory to reflect latest image-file date
-	if (fmt.Sprintf("%v", *titlePtr)) != "" {
-		err = os.Rename("./dest/tmp", fmt.Sprintf("./dest/%s-%s", ffoldername, (fmt.Sprintf("%v", *titlePtr))))
-	} else {
-		err = os.Rename("./dest/tmp", fmt.Sprintf("./dest/%s", ffoldername))
+	// 1. Get list of src files from ./files
+	srcFiles := getFiles(imageDir)
+	if len(srcFiles) <= 0 {
+		fmt.Println("no srcFiles")
 	}
 
-	if err != nil {
-		fmt.Printf("error walking the path %q: %v\n", imageDir, err)
-		log.Fatal(err)
+	// TEST START
+	// srcFiles = []string{
+	// 	//"test/test-noexif.jpg",
+	// 	"test/test-exif.jpg",
+	// }
+	// targetDir1 = "./testdest"
+	// targetDir2 = "tmp"
+	// targetDir = targetDir1 + "/" + targetDir2
+	// os.MkdirAll(targetDir, 0755)
+	// TEST END
+
+	// 2. Process files and get Exif data
+	foldername := getExifData(srcFiles, targetDir)
+	if len(foldername) <= 0 {
+		fmt.Println("no foldername")
+	}
+
+	// 3. Check for consistency between source and target directories
+	errCD := compareDir(targetDir1)
+	if errCD != nil {
+		fmt.Println("erdCD")
+	}
+
+	// 4.  Rename target directory to reflect latest image-file date
+	errRD := renameDir(titlePtr, targetDir, targetDir1, foldername)
+	if errRD != nil {
+		fmt.Println("errRD")
 	}
 
 	endTime := time.Now().UnixNano()
-	// Convert nanos to milliseconds
 	diff := (int64(endTime) - int64(startTime)) / 1000000
 	fmt.Println("Execution Time:", diff, "milliseconds")
 }
