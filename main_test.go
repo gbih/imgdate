@@ -33,11 +33,11 @@ func TestCopyImg(t *testing.T) {
 
 	defer os.RemoveAll(dir) // clean up
 
-	path := "./test/test.jpg"
-	dest := fmt.Sprint(dir, "/test.jpg")
+	targetFile := fmt.Sprint(dir, "/test-exif.jpg")
+	srcFile := "./test/test-exif.jpg"
 
 	t.Log("When required to copy an image from source to target")
-	err = copyImg(path, dest)
+	err = copyImg(targetFile, srcFile)
 	if err != nil {
 		t.Errorf("\tgot %#v; want %#v", "nil", err)
 	} else {

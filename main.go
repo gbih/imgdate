@@ -34,13 +34,13 @@ func getSize(file string) float64 {
 
 //--------------------
 
-const Debug = false
+const Debug = true
 
 // https://blog.stathat.com/2012/10/10/time_any_function_in_go.html
 func timeTrack(start time.Time, name string) {
 	if Debug != false {
 		elapsed := time.Since(start)
-		log.Printf("%s took %s", name, elapsed)
+		log.Printf("%s\t time: %s", name, elapsed)
 	}
 }
 
