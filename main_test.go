@@ -1,24 +1,34 @@
-// go test -v
 package main
 
 import (
 	"fmt"
 	exif "github.com/rwcarlsen/goexif/exif"
 	"io/ioutil"
+	"log"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 )
 
-// Validate the copyImg function can copy images properly
+// This does not test main, this is essentially an init-function
+// https://medium.com/goingogo/why-use-testmain-for-testing-in-go-dafb52b406bc
+// https://golang.org/pkg/testing/#hdr-Main
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	log.Println("Do stuff BEFORE tests!")
+	exitVal := m.Run()
+	log.Println("Do stuff AFTER tests!")
+	os.Exit(exitVal)
+}
 
-// https://golang.org/src/io/ioutil/example_test.go
+// Read more about this style of unit testing at:
+// https://github.com/golang/go/wiki/TableDrivenTests
 
 func TestCopyImg(t *testing.T) {
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("got: %v", err)
 	}
 
 	defer os.RemoveAll(dir) // clean up
@@ -27,16 +37,16 @@ func TestCopyImg(t *testing.T) {
 	dest := fmt.Sprint(dir, "/test.jpg")
 
 	t.Log("When required to copy an image from source to target")
-	ans := copyImg(path, dest)
-	if ans != nil {
-		t.Errorf("\tShould receive a value of %v, but got %v", "nil", ans)
+	err = copyImg(path, dest)
+	if err != nil {
+		t.Errorf("\tgot %#v; want %#v", "nil", err)
 	} else {
-		t.Logf("\tShould receive a value of %v when succesful in copying", ans)
+		t.Logf("\tgot %#v", err)
 	}
 }
 
 func TestDateTimeExtended(t *testing.T) {
-	t.Log("Given the need to extract exif data and transform date format")
+	t.Log("When required to extract exif data and transform date format")
 
 	path := "./test/test-exif.jpg"
 	f, err := os.Open(path)
@@ -44,29 +54,29 @@ func TestDateTimeExtended(t *testing.T) {
 	// Exif processing
 	x, err := exif.Decode(f)
 	if err != nil {
-		fmt.Println("ERROR")
-		t.Log(err)
+		//fmt.Println("ERROR")
+		//t.Log(err)
+		t.Errorf("\tgot %#v; want %#v", err, err)
 		//return
 	}
 
 	tm, err := dateTimeExtended(x)
 	if err != nil {
-		t.Log("error")
+		t.Fatal(err)
+		//t.Log("error")
 	}
 	ans := "2020.11.04_09.29.03"
-	if ans == tm {
-		t.Log("OK")
-	} else {
-		t.Error("ERROR")
+	if ans != tm {
+		t.Errorf("\tgot %#v; want %#v", err, ans)
 	}
 }
 
 func TestGetFiles(t *testing.T) {
 	t.Log("Given the need to list the matching files in a directory")
 
-	ans := getFiles("test")
-	if len(ans) != 3 {
-		t.Error("ERROR")
+	err := getFiles("test")
+	if len(err) != 3 {
+		t.Errorf("\tgot %#v; want %#v", err, 3)
 	} else {
 		t.Log("\tShould receive 2 compatible jpg files")
 	}
@@ -95,18 +105,31 @@ func TestGetExifData(t *testing.T) {
 			targetDir := targetDir1 + "/" + targetDir2
 			err := os.RemoveAll(targetDir1)
 			if err != nil {
-				fmt.Println("errro")
+				t.Errorf("\tgot %#v; want %#v", err, nil)
 			}
 			err = os.MkdirAll(targetDir, 0755)
 			if err != nil {
-				t.Error("ERROR2")
+				t.Errorf("\tgot %#v; want %#v", err, nil)
 			}
 			ans := getExifData(srcFiles, targetDir)
 
 			if !reflect.DeepEqual(tc.want, ans) {
-				//fmt.Printf("tc.want %v, ans %v", tc.want, ans)
-				t.Errorf("expected: %v, got: %v", tc.want, ans)
+				t.Errorf("\tgot %#v; want %#v", ans, tc.want)
 			}
 		})
 	}
+}
+
+func TestSetupDirs(t *testing.T) {
+	t.Log("When required to create folders")
+
+	targetDir1 := "./dest"
+	targetDir2 := "tmp"
+	targetDir := targetDir1 + "/" + targetDir2
+
+	err := setupDirs(targetDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }

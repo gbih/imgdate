@@ -11,8 +11,12 @@ To use:
 
 - The latest date is used for target folder name. 
 
+- To append a custom title to folder name, use `-t` tag. Example:
+```
+go run . -t="fishing-trip"
+```
 
 To do:
 
-- Add testing
+- Reorganize into discrete components and add unit tests
 
