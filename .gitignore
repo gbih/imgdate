@@ -1,4 +1,5 @@
 .DS_Store
 dest/
 testdest/
-files/*
+files/*.jpg
+files/*.jpeg
