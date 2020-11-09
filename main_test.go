@@ -11,26 +11,20 @@ import (
 	"testing"
 )
 
-// This does not test main, this is essentially an init-function
-// https://medium.com/goingogo/why-use-testmain-for-testing-in-go-dafb52b406bc
-// https://golang.org/pkg/testing/#hdr-Main
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	log.Println("Do stuff BEFORE tests!")
-	exitVal := m.Run()
-	log.Println("Do stuff AFTER tests!")
-	os.Exit(exitVal)
-}
-
-// Read more about this style of unit testing at:
-// https://github.com/golang/go/wiki/TableDrivenTests
+// Essentially this is an init-function. It does not test "main"
+// func TestMain(m *testing.M) {
+// 	// call flag.Parse() here if TestMain uses flags
+// 	log.Println("Do stuff BEFORE tests!")
+// 	exitVal := m.Run()
+// 	log.Println("Do stuff AFTER tests!")
+// 	os.Exit(exitVal)
+// }
 
 func TestCopyImg(t *testing.T) {
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
 		t.Errorf("got: %v", err)
 	}
-
 	defer os.RemoveAll(dir) // clean up
 
 	targetFile := fmt.Sprint(dir, "/test-exif.jpg")
@@ -54,16 +48,12 @@ func TestDateTimeExtended(t *testing.T) {
 	// Exif processing
 	x, err := exif.Decode(f)
 	if err != nil {
-		//fmt.Println("ERROR")
-		//t.Log(err)
 		t.Errorf("\tgot %#v; want %#v", err, err)
-		//return
 	}
 
 	tm, err := dateTimeExtended(x)
 	if err != nil {
-		t.Fatal(err)
-		//t.Log("error")
+		t.Error(err)
 	}
 	ans := "2020.11.04_09.29.03"
 	if ans != tm {
@@ -130,6 +120,29 @@ func TestSetupDirs(t *testing.T) {
 	err := setupDirs(targetDir)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCountFiles(t *testing.T) {
+
+	dir, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Errorf("got: %v", err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	_, err = ioutil.TempFile(dir, "example.*.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	//defer os.Remove(tmpfile.Name()) // clean up
+
+	ans, err := countFiles(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if ans != 1 {
+		t.Errorf("\tgot %#v; want %#v", ans, nil)
 	}
 
 }

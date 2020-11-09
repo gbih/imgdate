@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -34,7 +33,7 @@ func getSize(file string) float64 {
 
 //--------------------
 
-const Debug = true
+const Debug = false
 
 // https://blog.stathat.com/2012/10/10/time_any_function_in_go.html
 func timeTrack(start time.Time, name string) {
@@ -141,21 +140,22 @@ func getExifData(srcFiles []string, targetFolder string) string {
 		defer f.Close()
 		if err != nil {
 			log.Panicf("Cannot open file %v", srcFile)
-			return ""
+			return foldername
 		}
 
 		// decodedData contains all the exif properties
 		decodedData, err := exif.Decode(f)
 		if err != nil {
 			log.Printf("No exif data in %v", srcFile)
-			return ""
+			// simply pass through current foldername
+			return foldername
 		}
 
 		// Exif date properties
 		imgName, err := dateTimeExtended(decodedData)
 		if err != nil {
 			log.Printf("No dateTimeExtended exif data in %v", srcFile)
-			return ""
+			return foldername
 		}
 
 		imgNameFinal := fmt.Sprintf("%v_%v.jpg", imgName, i)
@@ -187,24 +187,27 @@ func getExifData(srcFiles []string, targetFolder string) string {
 
 //--------------------
 
-func compareDir(targetDir1 string) error {
-	defer timeTrack(time.Now(), "compareDir")
+// func countFiles(targetDir1 string) error {
+// 	defer timeTrack(time.Now(), "countFiles")
 
-	cmd := exec.Command("sh", "-c", "ls ./files | wc -l")
-	stdoutStderr, err := cmd.CombinedOutput()
+// 	cmd := exec.Command("sh", "-c", "ls ./files | wc -l")
+// 	stdoutStderr, err := cmd.CombinedOutput()
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	fmt.Printf("Number of files in ./files: %s", stdoutStderr)
+// 	return nil
+// }
+
+func countFiles(directory string) (int, error) {
+	defer timeTrack(time.Now(), "countFiles")
+
+	files, err := ioutil.ReadDir(directory)
 	if err != nil {
 		log.Fatal(err)
+		//return 0, err
 	}
-	fmt.Printf("Number of files in ./files: %s", stdoutStderr)
-
-	cmd = exec.Command("sh", "-c", "ls $targetDir1/tmp | wc -l")
-	stdoutStderr, err = cmd.CombinedOutput()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Number of files in %s/tmp: %s", targetDir1, stdoutStderr)
-
-	return nil
+	return len(files), nil
 }
 
 //--------------------
@@ -282,10 +285,19 @@ func start() error {
 	}
 
 	// Check for consistency between source and target directories
-	err = compareDir(targetDir1)
+	directory := "./files"
+	filecount, err := countFiles(directory)
 	if err != nil {
-		fmt.Println("Error in compareDir", err)
+		fmt.Println("Error in countFiles", err)
 	}
+	fmt.Printf("Number of files in %s: %d\n", directory, filecount)
+
+	directory = targetDir1 + "/tmp"
+	filecount, err = countFiles(directory)
+	if err != nil {
+		fmt.Println("Error in countFiles", err)
+	}
+	fmt.Printf("Number of files in %s: %d\n", directory, filecount)
 
 	// Rename target directory to reflect latest image-file date
 	err = renameDir(titlePtr, targetDir, targetDir1, foldername)
