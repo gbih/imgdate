@@ -16,19 +16,28 @@ import (
 )
 
 // Note:
-// ioutil.ReadFile reads the whole file in at once.
-// For more control, opening a file to obtain an os.File value
-// and then
+// 1. ioutil.ReadFile reads the whole file in at once.
+// For more control, open a file to obtain an os.File value
+// and then extract the appropriate data.
+//
+// 2. If you propagate the error in subroutine so it becomes
+// a failure of the calling routine, return the error as-is:
+// return nil, err
+//
+// 3. If you need to construct a detailed error message, include
+// where the error occurred and underlying error:
+// return nil, fmt.Errorf("parsing % as HTML: %v", ur, err)
+
 //--------------------
 
-// https://stackoverflow.com/questions/17133590/how-to-get-file-length-in-go
-func getSize(file string) float64 {
+func getSize(file string) (float64, error) {
 	fi, err := os.Stat(file)
 	if err != nil {
-		log.Fatal(err)
+		return 0, fmt.Errorf("returning FileInfo describing file %v: %v", file, err)
+		//log.Fatal(err)
 	}
 
-	return (float64(fi.Size()) / 1000000)
+	return (float64(fi.Size()) / 1000000), nil
 }
 
 //--------------------
@@ -48,10 +57,8 @@ func timeTrack(start time.Time, name string) {
 func copyImg(targetFile, srcFile string) error {
 	//defer timeTrack(time.Now(), "copyImg")
 
-	// ReadFile reads the file named by filename and returns the contents. A successful call
-	// returns err == nil, not err == EOF. Because ReadFile reads the whole file, it does
-	// not treat an EOF from Read as an error to be reported.
-	// ReadFile func(filename string) ([]byte, error)
+	// Better to fail here than propagate error upwards, since this is core functionality.
+
 	input, err := ioutil.ReadFile(srcFile)
 	if err != nil {
 		log.Fatalf("Cannot read file %v in copyImg, %v", srcFile, err)
@@ -59,7 +66,6 @@ func copyImg(targetFile, srcFile string) error {
 
 	err = ioutil.WriteFile(targetFile, []byte(input), 0644)
 	if err != nil {
-		// Here, better to fail than return error
 		log.Fatalf("Cannot write to file %v in copyImg, %v", srcFile, err)
 	}
 
@@ -71,6 +77,8 @@ func copyImg(targetFile, srcFile string) error {
 func dateTimeExtended(x *exif.Exif) (string, error) {
 	//defer timeTrack(time.Now(), "dateTimeExtended")
 
+	// Some photos will not have exif info, so we do not stop the control flow here,
+	// but just return a blank value and handle control flow elsewhere.
 	tag, err := x.Get(exif.DateTimeOriginal) // "2020:11:05 12:24:06"
 	if err != nil {
 		tag, err = x.Get(exif.DateTime)
@@ -99,7 +107,10 @@ func getFiles(imageDir string) []string {
 	var files []string
 
 	// Walk through files in this directory and process images
+	// If encounter error here, fail here rather than propagate error upwards, since this
+	// is core functionality.
 	err := filepath.Walk(imageDir, func(path string, info os.FileInfo, err error) error {
+		// Errors in walkFn, not Walk
 		if err != nil {
 			log.Fatalf("Failure accessing path %v, %v", path, err)
 		}
@@ -115,8 +126,11 @@ func getFiles(imageDir string) []string {
 
 		return nil
 	})
+	// Walk error
 	if err != nil {
-		log.Fatalf("Error walking the path %q: %v\n", imageDir, err)
+		fmt.Printf("error walking the path %q: %v\n", imageDir, err)
+		return nil
+		//log.Fatalf("Error walking the path %q: %v\n", imageDir, err)
 	}
 	return files
 }
@@ -204,8 +218,7 @@ func countFiles(directory string) (int, error) {
 
 	files, err := ioutil.ReadDir(directory)
 	if err != nil {
-		log.Fatal(err)
-		//return 0, err
+		return 0, fmt.Errorf("could not count files in %v: %v", directory, err)
 	}
 	return len(files), nil
 }
@@ -217,9 +230,15 @@ func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) error
 
 	if (fmt.Sprintf("%v", *titlePtr)) != "" {
 		err := os.Rename(targetDir, fmt.Sprintf("./%s/%s-%s", targetDir1, foldername, (fmt.Sprintf("%v", *titlePtr))))
+		if err != nil {
+			return fmt.Errorf("could not rename file %v: %v", targetDir, err)
+		}
 		return err
 	} else {
 		err := os.Rename(targetDir, fmt.Sprintf("./%s/%s", targetDir1, foldername))
+		if err != nil {
+			return fmt.Errorf("could not rename file %v: %v", targetDir, err)
+		}
 		return err
 	}
 }
@@ -231,12 +250,13 @@ func setupDirs(targetDir string) error {
 
 	err := os.RemoveAll("./dest")
 	if err != nil {
+		// This is key functionality. If get error, fail here
 		log.Fatalf("Error removing ./dest, %v", err)
 	}
 
 	err = os.RemoveAll("./files/.DS_Store")
 	if err != nil {
-		fmt.Println("Error removing ./files/.DS_Store", err)
+		log.Print("Error removing ./files/.DS_Store:", err)
 	}
 
 	err = os.MkdirAll(targetDir, 0755)
@@ -311,8 +331,7 @@ func start() error {
 //--------------------
 
 func main() {
-	err := start()
-	if err != nil {
-		log.Fatalf("Error in start, %v", err)
+	if err := start(); err != nil {
+		log.Fatalf("Error in start: %v\n", err)
 	}
 }
