@@ -11,16 +11,37 @@ import (
 	"testing"
 )
 
-// Essentially this is an init-function. It does not test "main"
-// func TestMain(m *testing.M) {
-// 	// call flag.Parse() here if TestMain uses flags
-// 	log.Println("Do stuff BEFORE tests!")
-// 	exitVal := m.Run()
-// 	log.Println("Do stuff AFTER tests!")
-// 	os.Exit(exitVal)
-// }
+func TestGetSize(t *testing.T) {
+	sizes := []int64{
+		1,
+		42,
+		125,
+	}
+
+	t.Run("Basic", func(t *testing.T) {
+		for _, size := range sizes {
+			f, err := os.Create("foo.bar")
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer os.Remove("foo.bar")
+
+			if err := f.Truncate(size); err != nil {
+				log.Fatal(err)
+			}
+
+			got, _ := getSize("foo.bar")
+			want := size
+			fmt.Println("got", got)
+			if got != want {
+				t.Errorf("\tgot %v; want %v", got, want)
+			}
+		}
+	})
+}
 
 func TestCopyImg(t *testing.T) {
+
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
 		t.Errorf("got: %v", err)
@@ -31,11 +52,13 @@ func TestCopyImg(t *testing.T) {
 	srcFile := "./test/test-exif.jpg"
 
 	t.Log("When required to copy an image from source to target")
-	err = copyImg(targetFile, srcFile)
-	if err != nil {
-		t.Errorf("\tgot %#v; want %#v", "nil", err)
+	got := copyImg(targetFile, srcFile)
+	want := error(nil)
+
+	if got != want {
+		t.Errorf("\tgot %v; want %v", got, want)
 	} else {
-		t.Logf("\tgot %#v", err)
+		t.Logf("\tgot %v", got)
 	}
 }
 
@@ -51,24 +74,27 @@ func TestDateTimeExtended(t *testing.T) {
 		t.Errorf("\tgot %#v; want %#v", err, err)
 	}
 
-	tm, err := dateTimeExtended(x)
+	got, err := dateTimeExtended(x)
+	want := "2020.11.04_09.29.03"
 	if err != nil {
 		t.Error(err)
 	}
-	ans := "2020.11.04_09.29.03"
-	if ans != tm {
-		t.Errorf("\tgot %#v; want %#v", err, ans)
+
+	if got != want {
+		t.Errorf("\tgot %#v; want %#v", got, want)
 	}
 }
 
 func TestGetFiles(t *testing.T) {
 	t.Log("Given the need to list the matching files in a directory")
 
-	err := getFiles("test")
-	if len(err) != 3 {
-		t.Errorf("\tgot %#v; want %#v", err, 3)
+	got := getFiles("test")
+	want := 3
+
+	if len(got) != want {
+		t.Errorf("\tgot %#v; want %#v", got, want)
 	} else {
-		t.Log("\tShould receive 2 compatible jpg files")
+		t.Logf("\tShould receive %v compatible jpg files", got)
 	}
 }
 
@@ -101,10 +127,10 @@ func TestGetExifData(t *testing.T) {
 			if err != nil {
 				t.Errorf("\tgot %#v; want %#v", err, nil)
 			}
-			ans := getExifData(srcFiles, targetDir)
+			got := getExifData(srcFiles, targetDir)
 
-			if !reflect.DeepEqual(tc.want, ans) {
-				t.Errorf("\tgot %#v; want %#v", ans, tc.want)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("\tgot %#v; want %#v", got, tc.want)
 			}
 		})
 	}
@@ -117,9 +143,11 @@ func TestSetupDirs(t *testing.T) {
 	targetDir2 := "tmp"
 	targetDir := targetDir1 + "/" + targetDir2
 
-	err := setupDirs(targetDir)
-	if err != nil {
-		t.Fatal(err)
+	got := setupDirs(targetDir)
+	want := error(nil)
+
+	if got != want {
+		t.Fatal(got)
 	}
 }
 
@@ -131,18 +159,49 @@ func TestCountFiles(t *testing.T) {
 	}
 	defer os.RemoveAll(dir) // clean up
 
-	_, err = ioutil.TempFile(dir, "example.*.txt")
+	tmpfile, err := ioutil.TempFile(dir, "example.*.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
-	//defer os.Remove(tmpfile.Name()) // clean up
+	defer os.Remove(tmpfile.Name()) // clean up
 
-	ans, err := countFiles(dir)
+	got, err := countFiles(dir)
+	want := 1
+
 	if err != nil {
 		log.Fatal(err)
 	}
-	if ans != 1 {
-		t.Errorf("\tgot %#v; want %#v", ans, nil)
+	if got != want {
+		t.Errorf("\tgot %v; want %v", got, want)
 	}
+
+}
+
+func TestRenameDir(t *testing.T) {
+
+	wantTest := []string{
+		"2020.11.10",
+		"images",
+		"LONGNAMETEST",
+	}
+	t.Run("TestRenameDir", func(t *testing.T) {
+		for _, want := range wantTest {
+			dummy := "test"
+			titlePtr := &dummy
+			targetDir1 := "./testdest"
+			targetDir := "./testdest/tmp"
+
+			err := os.MkdirAll(targetDir, 0755)
+			if err != nil {
+				log.Fatalf("Error making pathway %v, %v", targetDir, err)
+			}
+			defer os.RemoveAll(targetDir1) // clean up
+
+			got, _ := renameDir(titlePtr, targetDir, targetDir1, want)
+			if got != want {
+				t.Errorf("\tgot %v; want %v", got, want)
+			}
+		}
+	})
 
 }

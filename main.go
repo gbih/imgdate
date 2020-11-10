@@ -15,29 +15,16 @@ import (
 	"time"
 )
 
-// Note:
-// 1. ioutil.ReadFile reads the whole file in at once.
-// For more control, open a file to obtain an os.File value
-// and then extract the appropriate data.
-//
-// 2. If you propagate the error in subroutine so it becomes
-// a failure of the calling routine, return the error as-is:
-// return nil, err
-//
-// 3. If you need to construct a detailed error message, include
-// where the error occurred and underlying error:
-// return nil, fmt.Errorf("parsing % as HTML: %v", ur, err)
-
 //--------------------
 
-func getSize(file string) (float64, error) {
-	fi, err := os.Stat(file)
+func getSize(file string) (int64, error) {
+	info, err := os.Stat(file)
 	if err != nil {
 		return 0, fmt.Errorf("returning FileInfo describing file %v: %v", file, err)
 		//log.Fatal(err)
 	}
 
-	return (float64(fi.Size()) / 1000000), nil
+	return info.Size(), nil
 }
 
 //--------------------
@@ -57,10 +44,9 @@ func timeTrack(start time.Time, name string) {
 func copyImg(targetFile, srcFile string) error {
 	//defer timeTrack(time.Now(), "copyImg")
 
-	// Better to fail here than propagate error upwards, since this is core functionality.
-
 	input, err := ioutil.ReadFile(srcFile)
 	if err != nil {
+		// Better to fail here than propagate error upwards, since this is core functionality.
 		log.Fatalf("Cannot read file %v in copyImg, %v", srcFile, err)
 	}
 
@@ -75,7 +61,7 @@ func copyImg(targetFile, srcFile string) error {
 //--------------------
 
 func dateTimeExtended(x *exif.Exif) (string, error) {
-	//defer timeTrack(time.Now(), "dateTimeExtended")
+	defer timeTrack(time.Now(), "dateTimeExtended")
 
 	// Some photos will not have exif info, so we do not stop the control flow here,
 	// but just return a blank value and handle control flow elsewhere.
@@ -201,18 +187,6 @@ func getExifData(srcFiles []string, targetFolder string) string {
 
 //--------------------
 
-// func countFiles(targetDir1 string) error {
-// 	defer timeTrack(time.Now(), "countFiles")
-
-// 	cmd := exec.Command("sh", "-c", "ls ./files | wc -l")
-// 	stdoutStderr, err := cmd.CombinedOutput()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	fmt.Printf("Number of files in ./files: %s", stdoutStderr)
-// 	return nil
-// }
-
 func countFiles(directory string) (int, error) {
 	defer timeTrack(time.Now(), "countFiles")
 
@@ -225,21 +199,26 @@ func countFiles(directory string) (int, error) {
 
 //--------------------
 
-func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) error {
+func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) (string, error) {
 	defer timeTrack(time.Now(), "renameDir")
 
 	if (fmt.Sprintf("%v", *titlePtr)) != "" {
-		err := os.Rename(targetDir, fmt.Sprintf("./%s/%s-%s", targetDir1, foldername, (fmt.Sprintf("%v", *titlePtr))))
+		newPath := fmt.Sprintf("%s/%s-%s", targetDir1, foldername, (fmt.Sprintf("%v", *titlePtr)))
+		err := os.Rename(targetDir, newPath)
 		if err != nil {
-			return fmt.Errorf("could not rename file %v: %v", targetDir, err)
+			fmt.Println("ERR:", err)
+			return foldername, fmt.Errorf("could not rename file %v: %v", targetDir, err)
 		}
-		return err
+		return foldername, err
+
 	} else {
-		err := os.Rename(targetDir, fmt.Sprintf("./%s/%s", targetDir1, foldername))
+
+		newPath := fmt.Sprintf("%s/%s", targetDir1, foldername)
+		err := os.Rename(targetDir, newPath)
 		if err != nil {
-			return fmt.Errorf("could not rename file %v: %v", targetDir, err)
+			return foldername, fmt.Errorf("could not rename file %v: %v", targetDir, err)
 		}
-		return err
+		return foldername, err
 	}
 }
 
@@ -320,7 +299,7 @@ func start() error {
 	fmt.Printf("Number of files in %s: %d\n", directory, filecount)
 
 	// Rename target directory to reflect latest image-file date
-	err = renameDir(titlePtr, targetDir, targetDir1, foldername)
+	_, err = renameDir(titlePtr, targetDir, targetDir1, foldername)
 	if err != nil {
 		fmt.Println("Error in renameDir", err)
 	}
