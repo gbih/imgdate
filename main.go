@@ -6,10 +6,7 @@ Reorganize error-handling strategy into this taxonomy:
 	func time.Date(...) Time
 3. Function success is not assured as it depends on factors beyond control, like io,
 so we always return an Error type
-
-
- logical errors, generated errors, compile-time…
-
+4. Type of errors: logical errors, generated errors, compile-time
 */
 
 package main
@@ -32,20 +29,27 @@ import (
 //--------------------
 
 func getSize(file string) (int64, error) {
-	info, err := os.Stat(file)
-	if err != nil {
+	if info, err := os.Stat(file); err != nil {
 		return 0, fmt.Errorf("returning FileInfo describing file %v: %v", file, err)
-		//log.Fatal(err)
+	} else {
+		return info.Size(), nil
 	}
-
-	return info.Size(), nil
 }
+
+// func getSize2(file string) (int64, error) {
+// 	info, err := os.Stat(file)
+// 	if err != nil {
+// 		return 0, fmt.Errorf("returning FileInfo describing file %v: %v", file, err)
+// 	}
+// 	return info.Size(), nil
+// }
 
 //--------------------
 
+// https://blog.stathat.com/2012/10/10/time_any_function_in_go.html
+// No explicit error handling here
 const Debug = false
 
-// https://blog.stathat.com/2012/10/10/time_any_function_in_go.html
 func timeTrack(start time.Time, name string) {
 	if Debug != false {
 		elapsed := time.Since(start)
@@ -56,17 +60,17 @@ func timeTrack(start time.Time, name string) {
 //--------------------
 
 func copyImg(targetFile, srcFile string) error {
-	//defer timeTrack(time.Now(), "copyImg")
+	// defer timeTrack(time.Now(), "copyImg")
 
-	input, err := ioutil.ReadFile(srcFile)
-	if err != nil {
+	if input, err := ioutil.ReadFile(srcFile); err != nil {
 		// Better to fail here than propagate error upwards, since this is core functionality.
 		log.Fatalf("Cannot read file %v in copyImg, %v", srcFile, err)
-	}
-
-	err = ioutil.WriteFile(targetFile, []byte(input), 0644)
-	if err != nil {
-		log.Fatalf("Cannot write to file %v in copyImg, %v", srcFile, err)
+	} else {
+		// flow into the next statement with input
+		err = ioutil.WriteFile(targetFile, []byte(input), 0644)
+		if err != nil {
+			log.Fatalf("Cannot write to file %v in copyImg, %v", srcFile, err)
+		}
 	}
 
 	return nil
@@ -75,7 +79,7 @@ func copyImg(targetFile, srcFile string) error {
 //--------------------
 
 func dateTimeExtended(x *exif.Exif) (string, error) {
-	defer timeTrack(time.Now(), "dateTimeExtended")
+	// defer timeTrack(time.Now(), "dateTimeExtended")
 
 	// Some photos will not have exif info, so we do not stop the control flow here,
 	// but just return a blank value and handle control flow elsewhere.
@@ -101,16 +105,9 @@ func dateTimeExtended(x *exif.Exif) (string, error) {
 
 //--------------------
 
-func getFiles(imageDir string) []string {
-	defer timeTrack(time.Now(), "getFiles")
-
-	var files []string
-
-	// Walk through files in this directory and process images
-	// If encounter error here, fail here rather than propagate error upwards, since this
-	// is core functionality.
-	err := filepath.Walk(imageDir, func(path string, info os.FileInfo, err error) error {
-		// Errors in walkFn, not Walk
+// This closure is a wrapper around Walkfunc, separated for easier testing
+func visit(files *[]string, imageDir string) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Fatalf("Failure accessing path %v, %v", path, err)
 		}
@@ -118,21 +115,27 @@ func getFiles(imageDir string) []string {
 			fmt.Printf("Skipping dir: %+v \n", info.Name())
 			return filepath.SkipDir
 		}
-
 		ext := strings.ToLower(filepath.Ext(path))
 		if ext == ".jpg" || ext == ".jpeg" {
-			files = append(files, path)
+			*files = append(*files, path)
 		}
 
 		return nil
-	})
-	// Walk error
-	if err != nil {
-		fmt.Printf("error walking the path %q: %v\n", imageDir, err)
-		return nil
-		//log.Fatalf("Error walking the path %q: %v\n", imageDir, err)
 	}
-	return files
+}
+
+//--------------------
+
+func getFiles(imageDir string) []string {
+	defer timeTrack(time.Now(), "getFiles")
+
+	var files []string
+	// Fail here rather than propagate error upwards, since this is core functionality.
+	if err := filepath.Walk(imageDir, visit(&files, imageDir)); err != nil {
+		return nil
+	} else {
+		return files
+	}
 }
 
 //--------------------
@@ -204,11 +207,11 @@ func getExifData(srcFiles []string, targetFolder string) string {
 func countFiles(directory string) (int, error) {
 	defer timeTrack(time.Now(), "countFiles")
 
-	files, err := ioutil.ReadDir(directory)
-	if err != nil {
+	if files, err := ioutil.ReadDir(directory); err != nil {
 		return 0, fmt.Errorf("could not count files in %v: %v", directory, err)
+	} else {
+		return len(files), nil
 	}
-	return len(files), nil
 }
 
 //--------------------
@@ -243,19 +246,15 @@ func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) (stri
 func setupDirs(targetDir string) error {
 	defer timeTrack(time.Now(), "setupDirs")
 
-	err := os.RemoveAll("./dest")
-	if err != nil {
-		// This is key functionality. If get error, fail here
+	if err := os.RemoveAll("./dest"); err != nil {
 		log.Fatalf("Error removing ./dest, %v", err)
 	}
 
-	err = os.RemoveAll("./files/.DS_Store")
-	if err != nil {
+	if err := os.RemoveAll("./files/.DS_Store"); err != nil {
 		log.Print("Error removing ./files/.DS_Store:", err)
 	}
 
-	err = os.MkdirAll(targetDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		log.Fatalf("Error making pathway %v, %v", targetDir, err)
 	}
 
@@ -281,9 +280,7 @@ func start() error {
 	imageDir := "files"
 
 	// Set up directories
-	err := setupDirs(targetDir)
-	if err != nil {
-		//return err
+	if err := setupDirs(targetDir); err != nil {
 		log.Fatal(err)
 	}
 

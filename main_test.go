@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -79,6 +81,22 @@ func TestDateTimeExtended(t *testing.T) {
 	if got != want {
 		t.Errorf("dateTimeExtended got %#v; want %#v", got, want)
 	}
+}
+
+func TestVisit(t *testing.T) {
+	var files []string
+	want := []string{"test/2020.11.05_12.19.56_48.jpg", "test/test-exif.jpg", "test/test-noexif.jpg"}
+	imageDir := "test"
+
+	if err := filepath.Walk(imageDir, visit(&files, imageDir)); err != nil {
+		t.Error(err)
+	}
+
+	got := files
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("visit got %v; want %v", got, want)
+	}
+
 }
 
 func TestGetFiles(t *testing.T) {
