@@ -1,3 +1,17 @@
+/*
+Reorganize error-handling strategy into this taxonomy:
+1. Function should always succeed. If not, fail immediately via log.Fatalf(),
+	start() error
+2. Function should always succeed given all preconditions are met, eg time.Data
+	func time.Date(...) Time
+3. Function success is not assured as it depends on factors beyond control, like io,
+so we always return an Error type
+
+
+ logical errors, generated errors, compile-time…
+
+*/
+
 package main
 
 import (
@@ -209,7 +223,8 @@ func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) (stri
 			fmt.Println("ERR:", err)
 			return foldername, fmt.Errorf("could not rename file %v: %v", targetDir, err)
 		}
-		return foldername, err
+		fmt.Println("NEWPATH", newPath)
+		return newPath, err
 
 	} else {
 
@@ -218,7 +233,8 @@ func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) (stri
 		if err != nil {
 			return foldername, fmt.Errorf("could not rename file %v: %v", targetDir, err)
 		}
-		return foldername, err
+		fmt.Println("NEWPATH", newPath)
+		return newPath, err
 	}
 }
 

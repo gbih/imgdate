@@ -6,72 +6,69 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestGetSize(t *testing.T) {
-	sizes := []int64{
-		1,
-		42,
-		125,
+	var sizes = []struct {
+		input int64
+		want  int64
+	}{
+		{1, 1},
+		{42, 42},
+		{125, 125},
 	}
 
-	t.Run("Basic", func(t *testing.T) {
-		for _, size := range sizes {
-			f, err := os.Create("foo.bar")
-			if err != nil {
+	// setup code
+	f, err := os.Create("foo.bar")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Remove("foo.bar")
+
+	for _, tt := range sizes {
+
+		t.Run(fmt.Sprint(tt.input), func(t *testing.T) {
+			if err := f.Truncate(tt.input); err != nil {
 				log.Fatal(err)
 			}
-			defer os.Remove("foo.bar")
-
-			if err := f.Truncate(size); err != nil {
-				log.Fatal(err)
-			}
-
 			got, _ := getSize("foo.bar")
-			want := size
-			fmt.Println("got", got)
+			want := tt.want
+
 			if got != want {
-				t.Errorf("\tgot %v; want %v", got, want)
+				t.Errorf("getSize got %v size; want %v", got, want)
 			}
-		}
-	})
+		})
+	}
 }
 
 func TestCopyImg(t *testing.T) {
 
+	// setup code
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
 		t.Errorf("got: %v", err)
 	}
-	defer os.RemoveAll(dir) // clean up
-
+	defer os.RemoveAll(dir)
 	targetFile := fmt.Sprint(dir, "/test-exif.jpg")
 	srcFile := "./test/test-exif.jpg"
 
-	t.Log("When required to copy an image from source to target")
 	got := copyImg(targetFile, srcFile)
 	want := error(nil)
 
 	if got != want {
-		t.Errorf("\tgot %v; want %v", got, want)
-	} else {
-		t.Logf("\tgot %v", got)
+		t.Errorf("copyImg got %v; want %v", got, want)
 	}
 }
 
 func TestDateTimeExtended(t *testing.T) {
-	t.Log("When required to extract exif data and transform date format")
-
+	// setup code
 	path := "./test/test-exif.jpg"
 	f, err := os.Open(path)
-
-	// Exif processing
 	x, err := exif.Decode(f)
 	if err != nil {
-		t.Errorf("\tgot %#v; want %#v", err, err)
+		t.Errorf("Decode got %#v; want %#v", err, err)
 	}
 
 	got, err := dateTimeExtended(x)
@@ -79,27 +76,22 @@ func TestDateTimeExtended(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 	if got != want {
-		t.Errorf("\tgot %#v; want %#v", got, want)
+		t.Errorf("dateTimeExtended got %#v; want %#v", got, want)
 	}
 }
 
 func TestGetFiles(t *testing.T) {
-	t.Log("Given the need to list the matching files in a directory")
 
 	got := getFiles("test")
 	want := 3
 
 	if len(got) != want {
-		t.Errorf("\tgot %#v; want %#v", got, want)
-	} else {
-		t.Logf("\tShould receive %v compatible jpg files", got)
+		t.Errorf("getFiles got %#v; want %#v", got, want)
 	}
 }
 
 func TestGetExifData(t *testing.T) {
-	t.Log("Given the need to process files and get Exif data")
 	tests := []struct {
 		input string
 		sep   string
@@ -111,34 +103,29 @@ func TestGetExifData(t *testing.T) {
 		{input: "test/documents.pdf", sep: ",", want: "tmp"},
 	}
 
-	for _, tc := range tests {
-		testname := fmt.Sprintf("%s/expected: %s", tc.input, tc.want)
-		t.Run(testname, func(t *testing.T) {
+	// setup code
+	targetDir1 := "./testdest"
+	targetDir2 := "tmp"
+	targetDir := targetDir1 + "/" + targetDir2
+	os.MkdirAll(targetDir, 0755)
+	defer os.RemoveAll(targetDir1)
 
-			srcFiles := strings.Split(tc.input, tc.sep)
-			targetDir1 := "./testdest"
-			targetDir2 := "tmp"
-			targetDir := targetDir1 + "/" + targetDir2
-			err := os.RemoveAll(targetDir1)
-			if err != nil {
-				t.Errorf("\tgot %#v; want %#v", err, nil)
-			}
-			err = os.MkdirAll(targetDir, 0755)
-			if err != nil {
-				t.Errorf("\tgot %#v; want %#v", err, nil)
-			}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			srcFiles := strings.Split(tt.input, tt.sep)
+
 			got := getExifData(srcFiles, targetDir)
+			want := tt.want
 
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("\tgot %#v; want %#v", got, tc.want)
+			if got != want {
+				t.Errorf("getExifData got %#v; want %#v", got, want)
 			}
 		})
 	}
 }
 
 func TestSetupDirs(t *testing.T) {
-	t.Log("When required to create folders")
-
+	// setup code
 	targetDir1 := "./dest"
 	targetDir2 := "tmp"
 	targetDir := targetDir1 + "/" + targetDir2
@@ -147,23 +134,23 @@ func TestSetupDirs(t *testing.T) {
 	want := error(nil)
 
 	if got != want {
-		t.Fatal(got)
+		t.Errorf("setupDirs got %v; want %v", got, want)
 	}
 }
 
 func TestCountFiles(t *testing.T) {
-
+	// setup code
 	dir, err := ioutil.TempDir("", "test")
 	if err != nil {
 		t.Errorf("got: %v", err)
 	}
-	defer os.RemoveAll(dir) // clean up
+	defer os.RemoveAll(dir)
 
 	tmpfile, err := ioutil.TempFile(dir, "example.*.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name()) // clean up
+	defer os.Remove(tmpfile.Name())
 
 	got, err := countFiles(dir)
 	want := 1
@@ -172,36 +159,43 @@ func TestCountFiles(t *testing.T) {
 		log.Fatal(err)
 	}
 	if got != want {
-		t.Errorf("\tgot %v; want %v", got, want)
+		t.Errorf("countFiles got %v; want %v", got, want)
 	}
 
 }
 
 func TestRenameDir(t *testing.T) {
-
-	wantTest := []string{
-		"2020.11.10",
-		"images",
-		"LONGNAMETEST",
+	// setup code
+	wantTests := []struct {
+		dummy      string
+		targetDir1 string
+		targetDir  string
+		newfolder  string
+		want       string
+	}{
+		{"testTitle1", "./testdest1", "./testdest1/tmp", "2020.11.10", "./testdest1/2020.11.10-testTitle1"},
+		{"testTitle2", "./testdest2", "./testdest2/tmp", "2020.11.09", "./testdest2/2020.11.09-testTitle2"},
+		{"testTitle3", "./testdest3", "./testdest3/tmp", "images", "./testdest3/images-testTitle3"},
+		{"テスト・タイルと4", "./testdest4", "./testdest4/tmp", "日本語", "./testdest4/日本語-テスト・タイルと4"},
 	}
-	t.Run("TestRenameDir", func(t *testing.T) {
-		for _, want := range wantTest {
-			dummy := "test"
-			titlePtr := &dummy
-			targetDir1 := "./testdest"
-			targetDir := "./testdest/tmp"
 
-			err := os.MkdirAll(targetDir, 0755)
+	for _, tt := range wantTests {
+		t.Run(fmt.Sprint(tt), func(t *testing.T) {
+
+			err := os.MkdirAll(tt.targetDir, 0755)
 			if err != nil {
-				log.Fatalf("Error making pathway %v, %v", targetDir, err)
+				log.Fatalf("Error making pathway %v, %v", tt.targetDir, err)
 			}
-			defer os.RemoveAll(targetDir1) // clean up
+			defer os.RemoveAll(tt.targetDir1)
 
-			got, _ := renameDir(titlePtr, targetDir, targetDir1, want)
+			titlePtr := &tt.dummy
+
+			got, _ := renameDir(titlePtr, tt.targetDir, tt.targetDir1, tt.newfolder)
+			want := tt.want
+
 			if got != want {
-				t.Errorf("\tgot %v; want %v", got, want)
+				t.Errorf("renameDir got %v; want %v", got, want)
 			}
-		}
-	})
-
+		})
+	}
 }
