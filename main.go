@@ -146,6 +146,8 @@ func getFiles(imageDir string) []string {
 
 //--------------------
 
+// TO-DO:
+// Reorganize into more discrete functionality
 func getExifData(directory string, srcFiles []string, targetFolder string) string {
 	defer timeTrack(time.Now(), "getExifData")
 
@@ -177,6 +179,10 @@ func getExifData(directory string, srcFiles []string, targetFolder string) strin
 			log.Printf("-- No exif data in %v", srcFile)
 			// simply pass through current foldername
 			imgNameFinal = srcFile
+
+			// TO-DO
+			// Edge case where all files lack exif data, have to create dummy foldername
+
 		} else {
 			// Exif date properties
 			imgName, err = dateTimeExtended(decodedData)
@@ -185,20 +191,9 @@ func getExifData(directory string, srcFiles []string, targetFolder string) strin
 				return foldername
 			}
 			imgNameFinal = fmt.Sprintf("%v_%v.jpg", imgName, i)
-
+			// Assume we have valid data at this point
+			foldername = strings.Split(imgNameFinal, "_")[0]
 		}
-
-		// // Exif date properties
-		// imgName, err = dateTimeExtended(decodedData)
-		// if err != nil {
-		// 	log.Printf("No dateTimeExtended exif data in %v", srcFile)
-		// 	return foldername
-		// }
-		// imgNameFinal = fmt.Sprintf("%v_%v.jpg", imgName, i)
-		// fmt.Println("------- ", srcFile, imgNameFinal)
-
-		// Assume we have exif data at this point
-		foldername = strings.Split(imgNameFinal, "_")[0]
 
 		targetFile := fmt.Sprintf("%v/%v", targetFolder, imgNameFinal)
 
@@ -218,6 +213,11 @@ func getExifData(directory string, srcFiles []string, targetFolder string) strin
 
 	// Wait for all file writes to complete.
 	wg.Wait()
+
+	// case where no exif data exists in any file, foldername is tmp, rename to something else
+	if foldername == "tmp" {
+		foldername = "copied-files"
+	}
 
 	return foldername
 }
