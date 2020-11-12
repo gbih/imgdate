@@ -45,6 +45,25 @@ func TestGetSize(t *testing.T) {
 	}
 }
 
+func TestPassThrough(t *testing.T) {
+
+	// setup code
+	dir, err := ioutil.TempDir("", "test")
+	if err != nil {
+		t.Errorf("got: %v", err)
+	}
+	defer os.RemoveAll(dir)
+	targetFile := fmt.Sprint(dir, "/test-video.mov")
+	srcFile := "DSCF7834.MOV"
+
+	got := copyImg("./files", targetFile, srcFile)
+	want := error(nil)
+
+	if got != want {
+		t.Errorf("copyImg got %v; want %v", got, want)
+	}
+}
+
 func TestCopyImg(t *testing.T) {
 
 	// setup code
@@ -54,9 +73,9 @@ func TestCopyImg(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	targetFile := fmt.Sprint(dir, "/test-exif.jpg")
-	srcFile := "./test/test-exif.jpg"
+	srcFile := "test-exif.jpg"
 
-	got := copyImg(targetFile, srcFile)
+	got := copyImg("./test", targetFile, srcFile)
 	want := error(nil)
 
 	if got != want {
@@ -132,7 +151,7 @@ func TestGetExifData(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			srcFiles := strings.Split(tt.input, tt.sep)
 
-			got := getExifData(srcFiles, targetDir)
+			got := getExifData("test", srcFiles, targetDir)
 			want := tt.want
 
 			if got != want {

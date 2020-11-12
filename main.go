@@ -59,17 +59,18 @@ func timeTrack(start time.Time, name string) {
 
 //--------------------
 
-func copyImg(targetFile, srcFile string) error {
+func copyImg(directory, targetFile, srcFile string) error {
 	// defer timeTrack(time.Now(), "copyImg")
 
-	if input, err := ioutil.ReadFile(srcFile); err != nil {
+	fileToOpen := fmt.Sprintf("%v/%v", directory, srcFile)
+	if input, err := ioutil.ReadFile(fileToOpen); err != nil {
 		// Better to fail here than propagate error upwards, since this is core functionality.
-		log.Fatalf("Cannot read file %v in copyImg, %v", srcFile, err)
+		log.Fatalf("Cannot read file %v in copyImg, %v", fileToOpen, err)
 	} else {
 		// flow into the next statement with input
 		err = ioutil.WriteFile(targetFile, []byte(input), 0644)
 		if err != nil {
-			log.Fatalf("Cannot write to file %v in copyImg, %v", srcFile, err)
+			log.Fatalf("Cannot write to file %v in copyImg, %v", fileToOpen, err)
 		}
 	}
 
@@ -116,8 +117,13 @@ func visit(files *[]string, imageDir string) filepath.WalkFunc {
 			return filepath.SkipDir
 		}
 		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".jpg" || ext == ".jpeg" {
-			*files = append(*files, path)
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".mov" {
+			// fmt.Println(info.Name())
+			// fmt.Println("PATH", path)
+			// fmt.Println("INFONAME", info.Name())
+
+			*files = append(*files, info.Name())
+
 		}
 
 		return nil
@@ -140,7 +146,7 @@ func getFiles(imageDir string) []string {
 
 //--------------------
 
-func getExifData(srcFiles []string, targetFolder string) string {
+func getExifData(directory string, srcFiles []string, targetFolder string) string {
 	defer timeTrack(time.Now(), "getExifData")
 
 	// Use a WaitGroup to block until all the concurrent writes are complete
@@ -153,7 +159,9 @@ func getExifData(srcFiles []string, targetFolder string) string {
 
 		// Open opens the named file for reading. We will not actually read the entire file here,
 		// only the relevant Exif properties. We use ioutil.Readfile later when making a copy.
-		f, err := os.Open(srcFile)
+		fileToOpen := fmt.Sprintf("%v/%v", directory, srcFile)
+
+		f, err := os.Open(fileToOpen)
 		defer f.Close()
 		if err != nil {
 			log.Panicf("Cannot open file %v", srcFile)
@@ -161,21 +169,33 @@ func getExifData(srcFiles []string, targetFolder string) string {
 		}
 
 		// decodedData contains all the exif properties
+		var imgName string
+		var imgNameFinal string
+
 		decodedData, err := exif.Decode(f)
 		if err != nil {
-			log.Printf("No exif data in %v", srcFile)
+			log.Printf("-- No exif data in %v", srcFile)
 			// simply pass through current foldername
-			return foldername
+			imgNameFinal = srcFile
+		} else {
+			// Exif date properties
+			imgName, err = dateTimeExtended(decodedData)
+			if err != nil {
+				log.Printf("No dateTimeExtended exif data in %v", srcFile)
+				return foldername
+			}
+			imgNameFinal = fmt.Sprintf("%v_%v.jpg", imgName, i)
+
 		}
 
-		// Exif date properties
-		imgName, err := dateTimeExtended(decodedData)
-		if err != nil {
-			log.Printf("No dateTimeExtended exif data in %v", srcFile)
-			return foldername
-		}
-
-		imgNameFinal := fmt.Sprintf("%v_%v.jpg", imgName, i)
+		// // Exif date properties
+		// imgName, err = dateTimeExtended(decodedData)
+		// if err != nil {
+		// 	log.Printf("No dateTimeExtended exif data in %v", srcFile)
+		// 	return foldername
+		// }
+		// imgNameFinal = fmt.Sprintf("%v_%v.jpg", imgName, i)
+		// fmt.Println("------- ", srcFile, imgNameFinal)
 
 		// Assume we have exif data at this point
 		foldername = strings.Split(imgNameFinal, "_")[0]
@@ -187,7 +207,7 @@ func getExifData(srcFiles []string, targetFolder string) string {
 
 		// Use this wrapper so we can easily add ctx later
 		go func(targetFile, srcFile string) {
-			copyImg(targetFile, srcFile)
+			copyImg(directory, targetFile, srcFile)
 
 			// Decrement the counter when the goroutine completes
 			defer wg.Done()
@@ -226,7 +246,6 @@ func renameDir(titlePtr *string, targetDir, targetDir1, foldername string) (stri
 			fmt.Println("ERR:", err)
 			return foldername, fmt.Errorf("could not rename file %v: %v", targetDir, err)
 		}
-		fmt.Println("NEWPATH", newPath)
 		return newPath, err
 
 	} else {
@@ -272,6 +291,7 @@ func start() error {
 	targetDir1 := "./dest"
 	targetDir2 := "tmp"
 	targetDir := targetDir1 + "/" + targetDir2
+	directory := "./files"
 
 	// Check for any cmd-line args
 	titlePtr := flag.String("t", "", "folder title")
@@ -291,13 +311,13 @@ func start() error {
 	}
 
 	// Process files, get Exif data, make copy
-	foldername := getExifData(srcFiles, targetDir)
+	foldername := getExifData(directory, srcFiles, targetDir)
 	if len(foldername) <= 0 {
 		fmt.Println("No foldername")
 	}
 
 	// Check for consistency between source and target directories
-	directory := "./files"
+
 	filecount, err := countFiles(directory)
 	if err != nil {
 		fmt.Println("Error in countFiles", err)
