@@ -214,11 +214,6 @@ func getExifData(directory string, srcFiles []string, targetFolder string) strin
 	// Wait for all file writes to complete.
 	wg.Wait()
 
-	// case where no exif data exists in any file, foldername is tmp, rename to something else
-	if foldername == "tmp" {
-		foldername = "copied-files"
-	}
-
 	return foldername
 }
 
