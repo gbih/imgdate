@@ -16,7 +16,4 @@ To use:
 go run . -t="fishing-trip"
 ```
 
-To do:
-
-- Reorganize into discrete components and add unit tests
 
